@@ -1,0 +1,10 @@
+### IntelliJ IDEA ###
+.idea
+.DS_Store
+*.iws
+*.iml
+*.ipr
+
+### Project ###
+third
+cmake-build-debug
