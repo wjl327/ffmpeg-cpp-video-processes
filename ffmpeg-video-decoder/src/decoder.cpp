@@ -105,7 +105,7 @@ int Decoder::initDecode(std::string source) {
                              pCodecCtx->pix_fmt, pCodecCtx->width, pCodecCtx->height,
                              AV_PIX_FMT_BGR24, SWS_FAST_BILINEAR, nullptr, nullptr, nullptr);
 
-    cout << "open stream succ, source: " << source << "find video stream idx: " << videoStream
+    cout << "open stream succ, source: " << source << ", find video stream idx: " << videoStream
     << ", width: " << imgWidth << ", height: " << imgHeight << ", size: " << imgSize << ", skip: " << skip
     << ", decodeCount: " << decodeCount << endl;
     return Constat::ok;
