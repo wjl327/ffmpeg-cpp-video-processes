@@ -252,14 +252,18 @@ int Decoder::decoding() {
                 decodeCount--;
                 sws_scale(sws_ctx, (const uint8_t *const *)pFrameOut->data,
                           pFrameOut->linesize, 0, imgHeight, pFrameRGB->data, pFrameRGB->linesize);
-                saveImage(getImageName());
+                //saveImage(getImageName());
+
+                av_frame_unref(pFrame);
+                av_frame_unref(pFrameOut);
             }
 
             decodeFrameNum++;
+            cout << "time: " << getFormatTime() << " decodeFrameNum: " << decodeFrameNum << endl;
         }
-    }
 
-    av_packet_unref(&packet);
+        av_packet_unref(&packet);
+    }
     return Constat::ok;
 }
 

@@ -167,9 +167,10 @@ int Decoder::decoding() {
 
             decodeFrameNum++;
         }
+
+        av_packet_unref(&packet);
     }
 
-    av_packet_unref(&packet);
     return Constat::ok;
 }
 

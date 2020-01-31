@@ -322,12 +322,9 @@ int Decoder::decoding() {
             cout << "error muxing packet, ret:" << ret << endl;
             break;
         }
-        av_free_packet(&packet);
 
-
+        av_packet_unref(&packet);
     }
-
-    av_packet_unref(&packet);
 
     //Write file trailer
     av_write_trailer(outFormatCtx);
