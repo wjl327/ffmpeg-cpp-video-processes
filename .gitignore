@@ -6,5 +6,6 @@
 *.ipr
 
 ### Project ###
+build
 third
 cmake-build-debug

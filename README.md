@@ -6,7 +6,11 @@ ffmpeg-video-avfilter 该模块是将视频解码成jpg图片，加上avfilter�
 
 ffmpeg-video-overlay  该模块是将视频解码成jpg图片，同时加上文字水印和图片水印的能力。
 
+ffmpeg-video-transcoder 该模块是将拉到的视频流直接转码推流到rtsp服务。
 
+ffmpeg-video-avstream 该模块是将视频流解码、avfilter、编码、推流到rtsp服务。
+
+ffmpeg-video-image-push 该模块与其他不同是，解码的是图片集合，而不是视频流，将图片解码后，编码成h264后再推流。
 
 
 参考资料
