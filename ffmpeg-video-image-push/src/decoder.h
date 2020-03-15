@@ -21,6 +21,8 @@ extern "C" {
 
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
+#include <sys/time.h>
+#include <sys/select.h>
 
 class Decoder {
 
@@ -32,12 +34,14 @@ private:
     int initEncode();
     int initPusher(std::string);
     int decoding();
+    bool isExistFile(std::string);
     std::string getImageName(int);
     long getImageSize(std::string);
     void closeDecode();
 
     int decodeJpg(int64_t pts);
-    int encodeYuvToH264();
+    int encodeYuvToH264(int64_t pts);
+    uint64_t getCurTimestamp();
 
 private:
 
@@ -48,7 +52,9 @@ private:
     AVFrame *pFrame = nullptr;
 
     //encode
-    int encodeFps = 30;
+    bool first = true;
+    int encodeFps = 5;
+    int frame_step = 200;
     AVCodec *h264Codec = nullptr;
     AVDictionary *h264Dict = nullptr;
     AVCodecContext *h264CodecCtx = nullptr;
@@ -64,5 +70,13 @@ enum Constat {
     ok = 0,
     system_error = -1
 };
+
+static void sleep_ms(unsigned int secs){
+
+    struct timeval tval;
+    tval.tv_sec=secs/1000;
+    tval.tv_usec=(secs*1000)%1000000;
+    select(0,NULL,NULL,NULL,&tval);
+}
 
 #endif //HELLO_DECODE_DECODE_H

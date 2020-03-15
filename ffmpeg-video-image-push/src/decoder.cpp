@@ -2,6 +2,7 @@
 #include <sstream>
 #include "decoder.h"
 #include "time.h"
+#include <unistd.h>
 
 using namespace std;
 
@@ -165,7 +166,7 @@ int Decoder::initPusher(std::string desc) {
 
     //另外一种参数设置方式
     av_dict_set(&h264Dict, "bufsize", "10240", 0);
-    av_dict_set(&h264Dict, "stimeout", "2000000", 0);
+    av_dict_set(&h264Dict, "stimeout", "6000000", 0);
     av_dict_set(&h264Dict, "rtsp_transport","tcp",0);
     av_dict_set(&h264Dict, "muxdelay", "0.1", 0);
     av_dict_set(&h264Dict, "tune", "zerolatency", 0);
@@ -183,9 +184,18 @@ int Decoder::initPusher(std::string desc) {
 
 int Decoder::decoding() {
 
-    for (int i = 1; i <= 4500; i++) {
+    //start_time=av_gettime();
+    for (int i = 1; i <= 10000; i++) {
+
+        uint64_t startTime = getCurTimestamp();
         std::string imageData;
         string imageName = getImageName(i);
+
+        if (!isExistFile(imageName)) {
+            cout << "==========finish push===========" << endl;
+            return 0;
+        }
+
         long filesize = getImageSize(imageName);
         if (filesize > imageData.size()) {
             imageData.resize(filesize);
@@ -194,23 +204,33 @@ int Decoder::decoding() {
         fread(&(imageData[0]), 1, filesize, fileImage);
         fclose(fileImage);
 
-        //把读取的jpeg数据解析为包
-        uint8_t *tempdata = (uint8_t *)(imageData.data());
-        size_t tempdataSize = filesize;
-        while (tempdataSize > 0) {
+        //读取的jpeg数据。属于没有封装格式的裸流，区别就是不包含PTS、DTS这些参数的。
+        uint8_t *in_data = (uint8_t *)(imageData.data());
+        size_t in_len = filesize;
+        while (in_len > 0) {
 
-            int len = av_parser_parse2(parserJpg, pCodecCtx, &pPacket->data, &pPacket->size, tempdata, tempdataSize, AV_NOPTS_VALUE, AV_NOPTS_VALUE, 0);
+            //通过av_parser_parse2拿到AVPaket数据
+            int len = av_parser_parse2(parserJpg, pCodecCtx, &pPacket->data, &pPacket->size, in_data, in_len, AV_NOPTS_VALUE, AV_NOPTS_VALUE, 0);
             if (len < 0) {
                 cout << "av_parser_parse2 failed!" << endl;
                 return Constat::system_error;
             }
-            tempdata += len;
-            tempdataSize -= len;
+            in_data += len;
+            in_len -= len;
 
             if (pPacket->size) {
                 cout << "parserJpg file: " << imageName << " i: " << i << " len: " << pPacket->size << endl;
                 decodeJpg(i);
             }
+        }
+
+        //Important:Delay
+        //av_usleep(pts_time - now_time);
+
+        //TODO 推流其实需要pts、duration；也需要用av_usleep进行暂停
+        uint64_t costTime = getCurTimestamp() - startTime;
+        if ( frame_step > costTime ) {
+            sleep_ms(frame_step - costTime);
         }
 
     }
@@ -220,7 +240,7 @@ int Decoder::decoding() {
 
 int Decoder::decodeJpg(int64_t pts) {
 
-    int ret = avcodec_send_packet(pCodecCtx, pPacket);
+    int ret = avcodec_send_packet(pCodecCtx, pPacket); //将原始数据包传给ffmpeg解码器
     if (ret < 0) {
         cout << "decodeJpg avcodec_send_packet failed, ret:" << ret << endl;
         return Constat::system_error;
@@ -228,7 +248,7 @@ int Decoder::decodeJpg(int64_t pts) {
 
     while (ret >= 0) {
 
-        ret = avcodec_receive_frame(pCodecCtx, pFrame); //解码一帧数据
+        ret = avcodec_receive_frame(pCodecCtx, pFrame); //从解码队列中取出1个frame
         if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
             break;
         }
@@ -240,16 +260,15 @@ int Decoder::decodeJpg(int64_t pts) {
 
         cout << "avcodec_receive_frame frame " << pCodecCtx->frame_number << endl;
 
-        /* 图片是解码器分配的内存，不需要释放 */
-        pFrame->pts = pts;
-        encodeYuvToH264();
+        encodeYuvToH264(pts);
     }
 
 }
 
-int Decoder::encodeYuvToH264() {
+int Decoder::encodeYuvToH264(int64_t pts) {
 
-    int ret = avcodec_send_frame(h264CodecCtx, pFrame);
+    pFrame->pts = pts;
+    int ret = avcodec_send_frame(h264CodecCtx, pFrame); //将帧数据包传给ffmpeg编码器
     if (ret < 0){
         cout << "encodeYuvToH264 avcodec_send_frame failed, ret:" << ret << endl;
         return Constat::system_error;
@@ -257,7 +276,7 @@ int Decoder::encodeYuvToH264() {
 
     while (ret >= 0) {
 
-        ret = avcodec_receive_packet(h264CodecCtx, h264Packet);
+        ret = avcodec_receive_packet(h264CodecCtx, h264Packet); //从编码队列中取出1个packagt
         if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF){
             break;
         }
@@ -267,7 +286,7 @@ int Decoder::encodeYuvToH264() {
             break;
         }
 
-        h264Packet->stream_index = outVideoindex;
+        //h264Packet->stream_index = outVideoindex;
         if ((ret = av_interleaved_write_frame(outFormatCtx, h264Packet)) < 0) {
             cout << "encodeYuvToH264 av_interleaved_write_frame failed, ret:" << ret << endl;
         }
@@ -291,6 +310,16 @@ long Decoder::getImageSize(string filename) {
     long s = ftell(f);
     fclose(f);
     return s;
+}
+
+bool Decoder::isExistFile(string filename) {
+    return access(filename.c_str(), 0) == 0;
+}
+
+uint64_t Decoder::getCurTimestamp(){
+    struct timeval cur;
+    gettimeofday(&cur, NULL);
+    return cur.tv_sec * 1000 + cur.tv_usec / 1000;
 }
 
 
